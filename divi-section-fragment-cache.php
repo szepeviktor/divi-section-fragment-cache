@@ -103,7 +103,7 @@ final class Plugin
             \PREG_SET_ORDER
         );
 
-        if (!\is_int($matched) || $matched === 0) {
+        if ($matched === false || $matched === 0) {
             return false;
         }
 
