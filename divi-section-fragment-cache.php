@@ -108,13 +108,21 @@ final class Plugin
         }
 
         foreach ($matches as $match) {
-            $classValue = $match[1] !== ''
-                ? $match[1]
-                : ($match[2] !== '' ? $match[2] : $match[3]);
+            if ($match[1] !== '') {
+                $classValue = $match[1];
+            } elseif ($match[2] !== '') {
+                $classValue = $match[2];
+            } else {
+                $classValue = $match[3];
+            }
 
             $classes = \preg_split('/\s+/', \trim($classValue));
 
-            if ($classes !== false && \in_array(self::NO_CACHE_CLASS, $classes, true)) {
+            if ($classes === false) {
+                continue;
+            }
+
+            if (\in_array(self::NO_CACHE_CLASS, $classes, true)) {
                 return true;
             }
         }
