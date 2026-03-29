@@ -29,7 +29,7 @@ The plugin ships with a built-in deny list for known dynamic shortcodes:
 
 You will likely need to customize this deny list for your own site so that any shortcode producing user-specific, time-sensitive, or otherwise dynamic output is excluded from fragment caching.
 
-At the moment the deny list is defined in `/home/runner/work/divi-section-fragment-cache/divi-section-fragment-cache/divi-section-fragment-cache.php` as the `Plugin::DENYLIST` constant, so customization currently means editing that list in code.
+At the moment the deny list is defined in `divi-section-fragment-cache.php` as the `Plugin::DENYLIST` constant, so customization currently means editing that list in code.
 
 ## Installation
 
