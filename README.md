@@ -17,15 +17,10 @@ If the content contains other top-level markup or shortcode structures outside D
 
 ## Deny list customization
 
-The plugin ships with a built-in deny list for known dynamic shortcodes:
+The plugin ships with a built-in deny list for known dynamic shortcodes in these plugins:
 
-- `diec_event_carousel`
-- `diec_event_page`
-- `decs_event_subscriber`
-- `decm_event_filter`
-- `decm_event_filter_child`
-- `dcet_event_ticket`
-- `decm_divi_event_calendar`
+- `gravityforms`
+- `divi-event-calendar-module`
 
 You will likely need to customize this deny list for your own site so that any shortcode producing user-specific, time-sensitive, or otherwise dynamic output is excluded from fragment caching.
 
