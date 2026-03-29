@@ -17,6 +17,8 @@ final class Plugin
      * @var string[]
      */
     private const DENYLIST = [
+        'gravityform',
+        'gravityforms',
         'diec_event_carousel',
         'diec_event_page',
         'decs_event_subscriber',
