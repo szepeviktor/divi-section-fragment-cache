@@ -8,6 +8,7 @@ WordPress plugin that fragment-caches top-level Divi sections and skips caching 
 - Splits the content into top-level `[et_pb_section]...[/et_pb_section]` blocks.
 - Renders each eligible section once and stores the rendered HTML in a transient for one day.
 - Bypasses the cache for sections whose rendered HTML contains the `dsec-no-cache` class.
+- Sections marked with `dsec-no-cache` are rendered on every request and are never stored in transients.
 
 ## Important limitation
 

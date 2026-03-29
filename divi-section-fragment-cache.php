@@ -96,13 +96,30 @@ final class Plugin
 
     private function containsNoCacheClass(string $rendered): bool
     {
-        $pattern = '/\bclass\s*=\s*(?:"[^"]*\b'
-            . \preg_quote(self::NO_CACHE_CLASS, '/')
-            . '\b[^"]*"|\'[^\']*\b'
-            . \preg_quote(self::NO_CACHE_CLASS, '/')
-            . '\b[^\']*\')/i';
+        $matched = \preg_match_all(
+            '/\bclass\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))/i',
+            $rendered,
+            $matches,
+            \PREG_SET_ORDER
+        );
 
-        return \preg_match($pattern, $rendered) === 1;
+        if (!\is_int($matched) || $matched === 0) {
+            return false;
+        }
+
+        foreach ($matches as $match) {
+            $classValue = $match[1] !== ''
+                ? $match[1]
+                : ($match[2] !== '' ? $match[2] : $match[3]);
+
+            $classes = \preg_split('/\s+/', \trim($classValue));
+
+            if ($classes !== false && \in_array(self::NO_CACHE_CLASS, $classes, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
