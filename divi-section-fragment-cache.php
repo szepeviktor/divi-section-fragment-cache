@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Plugin Name: Divi Section Fragment Cache
- * Description: Fragment cache for top-level Divi sections, skipping denylisted shortcodes.
+ * Description: Fragment cache for top-level Divi sections, skipping sections marked with dsec-no-cache.
  * Version: 0.1.0
  * Requires PHP: 7.4
  */
@@ -13,20 +13,7 @@ namespace SzepeViktor\DiviSectionFragmentCache;
 
 final class Plugin
 {
-    /**
-     * @var string[]
-     */
-    private const DENYLIST = [
-        'gravityform',
-        'gravityforms',
-        'diec_event_carousel',
-        'diec_event_page',
-        'decs_event_subscriber',
-        'decm_event_filter',
-        'decm_event_filter_child',
-        'dcet_event_ticket',
-        'decm_divi_event_calendar',
-    ];
+    private const NO_CACHE_CLASS = 'dsec-no-cache';
 
     public function register(): void
     {
@@ -68,11 +55,7 @@ final class Plugin
 
             $section = $part['content'];
 
-            if ($this->containsDenylistedShortcode($section)) {
-                $output .= $this->renderSection($section);
-            } else {
-                $output .= $this->getCachedSection((int) $postId, $sectionIndex, $section);
-            }
+            $output .= $this->getCachedSection((int) $postId, $sectionIndex, $section);
 
             $sectionIndex++;
         }
@@ -102,16 +85,24 @@ final class Plugin
 
         $rendered = $this->renderSection($section);
 
+        if ($this->containsNoCacheClass($rendered)) {
+            return $rendered;
+        }
+
         \set_transient($cacheKey, $rendered, \DAY_IN_SECONDS);
 
         return $rendered;
     }
 
-    private function containsDenylistedShortcode(string $section): bool
+    private function containsNoCacheClass(string $rendered): bool
     {
-        $pattern = '/\[(?:' . \implode('|', \array_map('preg_quote', self::DENYLIST)) . ')\b/';
+        $pattern = '/\bclass\s*=\s*(?:"[^"]*\b'
+            . \preg_quote(self::NO_CACHE_CLASS, '/')
+            . '\b[^"]*"|\'[^\']*\b'
+            . \preg_quote(self::NO_CACHE_CLASS, '/')
+            . '\b[^\']*\')/i';
 
-        return \preg_match($pattern, $section) === 1;
+        return \preg_match($pattern, $rendered) === 1;
     }
 
     /**
