@@ -38,6 +38,7 @@ The plugin:
 - splits top-level `et_pb_section` blocks
 - renders each section individually via `apply_filters('et_builder_render_layout', $section)`
 - stores a render snapshot in a transient
+- bypasses the plugin entirely during Divi frontend builder requests detected by `et_core_is_fb_enabled()`
 - on cache hit, replays stored side effects before returning the cached HTML
 
 That means the plugin is already moving away from an HTML-only fragment cache and toward a Divi render snapshot cache.
@@ -50,6 +51,7 @@ However, Divi compatibility is still incomplete because replay coverage is parti
 
 Current behavior, simplified:
 - filter `the_content`
+- skip frontend builder requests detected by `et_core_is_fb_enabled()`
 - split content into top-level `[et_pb_section]...[/et_pb_section]`
 - determine cacheability using a shortcode denylist
 - key cache by:
@@ -192,6 +194,7 @@ In practice, replaying during the existing `the_content` processing phase is ear
 Do not redesign the entire plugin in one step.
 
 Prefer incremental changes that keep the patch reviewable and preserve current behavior.
+Protect builder and editor contexts before optimizing normal frontend requests.
 
 ### 2. Maintain backward compatibility where reasonable
 
@@ -333,8 +336,9 @@ When modifying this plugin:
 5. Prefer helper extraction over deeply inlined logic.
 6. Ensure cache hit paths replay stored side effects before returning HTML.
 7. Ensure cache miss paths capture side effects around the actual section render.
-8. Maintain backward compatibility with older cached payloads where reasonable.
-9. Keep all comments in English.
+8. Keep Divi frontend builder requests out of the cache path unless there is a very strong reason not to.
+9. Maintain backward compatibility with older cached payloads where reasonable.
+10. Keep all comments in English.
 
 ---
 

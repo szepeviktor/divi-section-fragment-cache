@@ -35,13 +35,7 @@ final class Plugin
 
     public function filterContent(string $content): string
     {
-        if (
-            \is_admin()
-            || \is_feed()
-            || \is_preview()
-            || !\is_singular()
-            || \strpos($content, '[et_pb_section') === false
-        ) {
+        if ($this->shouldBypassContentFilter($content)) {
             return $content;
         }
 
@@ -78,6 +72,25 @@ final class Plugin
         }
 
         return $output;
+    }
+
+    private function shouldBypassContentFilter(string $content): bool
+    {
+        if (
+            \is_admin()
+            || \is_feed()
+            || \is_preview()
+            || !\is_singular()
+            || \strpos($content, '[et_pb_section') === false
+        ) {
+            return true;
+        }
+
+        if (\function_exists('et_core_is_fb_enabled') && \et_core_is_fb_enabled()) {
+            return true;
+        }
+
+        return false;
     }
 
     private function renderSection(string $section): string
@@ -126,19 +139,6 @@ final class Plugin
      */
     private function normalizeCachedPayload($cached): ?array
     {
-        if (\is_string($cached)) {
-            return [
-                'html' => $cached,
-                'animation_data' => [],
-                'link_options_data' => [],
-                'generated_css' => '',
-                'critical_css' => '',
-                'fonts_queue' => [],
-                'user_fonts_queue' => [],
-                'subjects_cache' => [],
-            ];
-        }
-
         if (!\is_array($cached) || !\is_string($cached['html'] ?? null)) {
             return null;
         }
