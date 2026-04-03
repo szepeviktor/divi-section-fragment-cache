@@ -20,6 +20,10 @@ Depending on what Divi records during section rendering, the plugin may store an
 - `html`
 - `animation_data`
 - `link_options_data`
+- scroll effects state
+- WordPress lazy-loading disable state
+- enqueued stylesheet handles
+- enqueued script handles
 - generated CSS deltas
 - font queue deltas
 - `et_pb_subjects_cache` deltas

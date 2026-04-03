@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Divi Section Fragment Cache
  * Description: Fragment cache for top-level Divi sections, skipping denylisted shortcodes.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Requires PHP: 7.4
  */
 
@@ -130,6 +130,10 @@ final class Plugin
      *     html: string,
      *     animation_data: array<int, array<string, mixed>>,
      *     link_options_data: array<int, array<string, mixed>>,
+     *     scroll_effects: array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>},
+     *     wp_lazy_loading_disabled: bool,
+     *     enqueued_styles: array<int, string>,
+     *     enqueued_scripts: array<int, string>,
      *     generated_css: string,
      *     critical_css: string,
      *     fonts_queue: array<string, array<string, mixed>>,
@@ -151,6 +155,10 @@ final class Plugin
             'link_options_data' => isset($cached['link_options_data']) && \is_array($cached['link_options_data'])
                 ? \array_values($this->indexEntriesByClass($cached['link_options_data']))
                 : [],
+            'scroll_effects' => $this->normalizeScrollEffectsPayload($cached['scroll_effects'] ?? null),
+            'wp_lazy_loading_disabled' => !empty($cached['wp_lazy_loading_disabled']),
+            'enqueued_styles' => $this->normalizeStringListPayload($cached['enqueued_styles'] ?? null),
+            'enqueued_scripts' => $this->normalizeStringListPayload($cached['enqueued_scripts'] ?? null),
             'generated_css' => \is_string($cached['generated_css'] ?? null) ? $cached['generated_css'] : '',
             'critical_css' => \is_string($cached['critical_css'] ?? null) ? $cached['critical_css'] : '',
             'fonts_queue' => isset($cached['fonts_queue']) && \is_array($cached['fonts_queue']) ? $cached['fonts_queue'] : [],
@@ -164,6 +172,10 @@ final class Plugin
      *     html: string,
      *     animation_data: array<int, array<string, mixed>>,
      *     link_options_data: array<int, array<string, mixed>>,
+     *     scroll_effects: array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>},
+     *     wp_lazy_loading_disabled: bool,
+     *     enqueued_styles: array<int, string>,
+     *     enqueued_scripts: array<int, string>,
      *     generated_css: string,
      *     critical_css: string,
      *     fonts_queue: array<string, array<string, mixed>>,
@@ -175,12 +187,18 @@ final class Plugin
     {
         $beforeAnimationData = $this->getAnimationDataSnapshot();
         $beforeLinkOptionsData = $this->getLinkOptionsDataSnapshot();
+        $beforeScrollEffects = $this->getScrollEffectsSnapshot();
+        $beforeLazyLoadingDisabled = $this->isWordPressLazyLoadingDisabledForRequest();
+        $beforeEnqueuedAssets = $this->getEnqueuedAssetsSnapshot();
         $beforeGeneratedCss = $this->getGeneratedCssSnapshot();
         $beforeFontQueues = $this->getFontQueueSnapshot();
         $beforeSubjectsCache = $this->getSubjectsCacheSnapshot($postId);
         $html = $this->renderSection($section);
         $afterAnimationData = $this->getAnimationDataSnapshot();
         $afterLinkOptionsData = $this->getLinkOptionsDataSnapshot();
+        $afterScrollEffects = $this->getScrollEffectsSnapshot();
+        $afterLazyLoadingDisabled = $this->isWordPressLazyLoadingDisabledForRequest();
+        $afterEnqueuedAssets = $this->getEnqueuedAssetsSnapshot();
         $afterGeneratedCss = $this->getGeneratedCssSnapshot();
         $afterFontQueues = $this->getFontQueueSnapshot();
         $afterSubjectsCache = $this->getSubjectsCacheSnapshot($postId);
@@ -190,12 +208,66 @@ final class Plugin
             'html' => $html,
             'animation_data' => $this->diffEntriesByClass($beforeAnimationData, $afterAnimationData),
             'link_options_data' => $this->diffEntriesByClass($beforeLinkOptionsData, $afterLinkOptionsData),
+            'scroll_effects' => $this->diffScrollEffectsSnapshot($beforeScrollEffects, $afterScrollEffects),
+            'wp_lazy_loading_disabled' => !$beforeLazyLoadingDisabled && $afterLazyLoadingDisabled,
+            'enqueued_styles' => $this->diffStringList($beforeEnqueuedAssets['styles'], $afterEnqueuedAssets['styles']),
+            'enqueued_scripts' => $this->diffStringList($beforeEnqueuedAssets['scripts'], $afterEnqueuedAssets['scripts']),
             'generated_css' => $generatedCssDelta['generated_css'],
             'critical_css' => $generatedCssDelta['critical_css'],
             'fonts_queue' => $this->diffAssociativeArray($beforeFontQueues['fonts_queue'], $afterFontQueues['fonts_queue']),
             'user_fonts_queue' => $this->diffAssociativeArray($beforeFontQueues['user_fonts_queue'], $afterFontQueues['user_fonts_queue']),
             'subjects_cache' => $this->diffAssociativeArray($beforeSubjectsCache, $afterSubjectsCache),
         ];
+    }
+
+    /**
+     * @param mixed $items
+     * @return array<int, string>
+     */
+    private function normalizeStringListPayload($items): array
+    {
+        if (!\is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if (!\is_string($item) || $item === '') {
+                continue;
+            }
+
+            $normalized[] = $item;
+        }
+
+        return \array_values(\array_unique($normalized));
+    }
+
+    /**
+     * @param mixed $scrollEffects
+     * @return array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>}
+     */
+    private function normalizeScrollEffectsPayload($scrollEffects): array
+    {
+        $normalized = [
+            'desktop' => [],
+            'tablet' => [],
+            'phone' => [],
+        ];
+
+        if (!\is_array($scrollEffects)) {
+            return $normalized;
+        }
+
+        foreach (\array_keys($normalized) as $device) {
+            if (!isset($scrollEffects[$device]) || !\is_array($scrollEffects[$device])) {
+                continue;
+            }
+
+            $normalized[$device] = $this->normalizeScrollEffectsEntries($scrollEffects[$device]);
+        }
+
+        return $normalized;
     }
 
     /**
@@ -212,6 +284,40 @@ final class Plugin
     private function getLinkOptionsDataSnapshot(): array
     {
         return $this->getClassKeyedDiviDataSnapshot('et_builder_handle_link_options_data');
+    }
+
+    /**
+     * @return array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>}
+     */
+    private function getScrollEffectsSnapshot(): array
+    {
+        if (!\class_exists('\ET_Builder_Element') || !\is_array(\ET_Builder_Element::$_scroll_effects_fields ?? null)) {
+            return $this->normalizeScrollEffectsPayload([]);
+        }
+
+        return $this->normalizeScrollEffectsPayload(\ET_Builder_Element::$_scroll_effects_fields);
+    }
+
+    private function isWordPressLazyLoadingDisabledForRequest(): bool
+    {
+        return \has_filter('wp_lazy_loading_enabled', '__return_false') !== false;
+    }
+
+    /**
+     * @return array{styles: array<int, string>, scripts: array<int, string>}
+     */
+    private function getEnqueuedAssetsSnapshot(): array
+    {
+        global $wp_styles, $wp_scripts;
+
+        return [
+            'styles' => isset($wp_styles->queue) && \is_array($wp_styles->queue)
+                ? $this->normalizeStringListPayload($wp_styles->queue)
+                : [],
+            'scripts' => isset($wp_scripts->queue) && \is_array($wp_scripts->queue)
+                ? $this->normalizeStringListPayload($wp_scripts->queue)
+                : [],
+        ];
     }
 
     /**
@@ -326,6 +432,28 @@ final class Plugin
     }
 
     /**
+     * @param array<int, string> $before
+     * @param array<int, string> $after
+     * @return array<int, string>
+     */
+    private function diffStringList(array $before, array $after): array
+    {
+        $beforeLookup = \array_fill_keys($before, true);
+        $delta = [];
+
+        foreach ($after as $item) {
+            if (isset($beforeLookup[$item])) {
+                continue;
+            }
+
+            $delta[] = $item;
+            $beforeLookup[$item] = true;
+        }
+
+        return $delta;
+    }
+
+    /**
      * @param array<string, mixed> $before
      * @param array<string, mixed> $after
      * @return array<string, mixed>
@@ -340,6 +468,60 @@ final class Plugin
             }
 
             $delta[$key] = $value;
+        }
+
+        return $delta;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $entries
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeScrollEffectsEntries(array $entries): array
+    {
+        $normalized = [];
+
+        foreach ($entries as $entry) {
+            if (!\is_array($entry)) {
+                continue;
+            }
+
+            $normalized[] = $entry;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>} $before
+     * @param array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>} $after
+     * @return array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>}
+     */
+    private function diffScrollEffectsSnapshot(array $before, array $after): array
+    {
+        $delta = [
+            'desktop' => [],
+            'tablet' => [],
+            'phone' => [],
+        ];
+
+        foreach (\array_keys($delta) as $device) {
+            $beforeEntries = [];
+
+            foreach ($before[$device] as $entry) {
+                $beforeEntries[\serialize($entry)] = true;
+            }
+
+            foreach ($after[$device] as $entry) {
+                $serialized = \serialize($entry);
+
+                if (isset($beforeEntries[$serialized])) {
+                    continue;
+                }
+
+                $beforeEntries[$serialized] = true;
+                $delta[$device][] = $entry;
+            }
         }
 
         return $delta;
@@ -532,6 +714,10 @@ final class Plugin
      *     html: string,
      *     animation_data: array<int, array<string, mixed>>,
      *     link_options_data: array<int, array<string, mixed>>,
+     *     scroll_effects: array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>},
+     *     wp_lazy_loading_disabled: bool,
+     *     enqueued_styles: array<int, string>,
+     *     enqueued_scripts: array<int, string>,
      *     generated_css: string,
      *     critical_css: string,
      *     fonts_queue: array<string, array<string, mixed>>,
@@ -543,6 +729,9 @@ final class Plugin
     {
         $this->replayClassKeyedDiviData('et_builder_handle_animation_data', $payload['animation_data']);
         $this->replayClassKeyedDiviData('et_builder_handle_link_options_data', $payload['link_options_data']);
+        $this->replayScrollEffects($payload['scroll_effects']);
+        $this->replayWordPressLazyLoadingDisabled($payload['wp_lazy_loading_disabled']);
+        $this->replayEnqueuedAssets($payload['enqueued_styles'], $payload['enqueued_scripts']);
         $this->replayGeneratedCss($payload['generated_css'], $payload['critical_css']);
         $this->replayFontQueues($payload['fonts_queue'], $payload['user_fonts_queue']);
         $this->replaySubjectsCache($postId, $payload['subjects_cache']);
@@ -560,6 +749,67 @@ final class Plugin
 
         foreach ($this->indexEntriesByClass($entries) as $entry) {
             \call_user_func($functionName, $entry);
+        }
+    }
+
+    /**
+     * @param array{desktop: array<int, array<string, mixed>>, tablet: array<int, array<string, mixed>>, phone: array<int, array<string, mixed>>} $scrollEffects
+     */
+    private function replayScrollEffects(array $scrollEffects): void
+    {
+        if (!\class_exists('\ET_Builder_Element') || !\is_array(\ET_Builder_Element::$_scroll_effects_fields ?? null)) {
+            return;
+        }
+
+        $current = $this->normalizeScrollEffectsPayload(\ET_Builder_Element::$_scroll_effects_fields);
+
+        foreach (\array_keys($current) as $device) {
+            $existingEntries = [];
+
+            foreach ($current[$device] as $entry) {
+                $existingEntries[\serialize($entry)] = true;
+            }
+
+            foreach ($scrollEffects[$device] as $entry) {
+                $serialized = \serialize($entry);
+
+                if (isset($existingEntries[$serialized])) {
+                    continue;
+                }
+
+                $existingEntries[$serialized] = true;
+                $current[$device][] = $entry;
+            }
+        }
+
+        \ET_Builder_Element::$_scroll_effects_fields = $current;
+    }
+
+    private function replayWordPressLazyLoadingDisabled(bool $isDisabled): void
+    {
+        if (!$isDisabled || $this->isWordPressLazyLoadingDisabledForRequest()) {
+            return;
+        }
+
+        \add_filter('wp_lazy_loading_enabled', '__return_false');
+    }
+
+    /**
+     * @param array<int, string> $styles
+     * @param array<int, string> $scripts
+     */
+    private function replayEnqueuedAssets(array $styles, array $scripts): void
+    {
+        if (\function_exists('wp_enqueue_style')) {
+            foreach ($styles as $handle) {
+                \wp_enqueue_style($handle);
+            }
+        }
+
+        if (\function_exists('wp_enqueue_script')) {
+            foreach ($scripts as $handle) {
+                \wp_enqueue_script($handle);
+            }
         }
     }
 
