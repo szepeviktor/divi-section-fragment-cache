@@ -6,14 +6,30 @@ WordPress plugin that fragment-caches top-level Divi sections and skips caching 
 
 - Hooks into `the_content` on singular frontend requests.
 - Splits the content into top-level `[et_pb_section]...[/et_pb_section]` blocks.
-- Renders each eligible section once and stores the rendered HTML in a transient for one day.
+- Renders each eligible section once and stores a render snapshot in a transient for one day.
 - Bypasses the cache for sections that contain shortcodes from the deny list.
+- Replays captured Divi side effects on cache hit before returning cached HTML.
+
+## Snapshot contents
+
+The current cache payload is not HTML-only.
+
+Depending on what Divi records during section rendering, the plugin may store and replay:
+
+- `html`
+- `animation_data`
+- `link_options_data`
+- generated CSS deltas
+- font queue deltas
+- `et_pb_subjects_cache` deltas
 
 ## Important limitation
 
 This plugin only works reliably when the content is made only of `et_pb_section` shortcodes.
 
 If the content contains other top-level markup or shortcode structures outside Divi sections, those parts are passed through unchanged and the cache strategy may not match the layout you expect.
+
+The plugin also relies on inferred Divi runtime side effects rather than an official Divi snapshot API, so compatibility should still be treated as partial rather than complete.
 
 ## Deny list customization
 
@@ -34,6 +50,7 @@ At the moment the deny list is defined in `divi-section-fragment-cache.php` as t
 
 ## Notes
 
-- Cached fragments are stored in transients for `DAY_IN_SECONDS`.
+- Cached render snapshots are stored in transients for `DAY_IN_SECONDS`.
 - Cache keys are based on the post ID, section index, and section content hash.
 - Sections with unbalanced `et_pb_section` shortcode nesting are not cached.
+- Older cache entries may still be plain HTML strings and are handled for backward compatibility.
