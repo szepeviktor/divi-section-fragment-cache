@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Divi Section Fragment Cache
  * Description: Fragment cache for top-level Divi sections, skipping denylisted shortcodes.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Requires PHP: 7.4
  */
 
@@ -81,6 +81,7 @@ final class Plugin
             || \is_feed()
             || \is_preview()
             || !\is_singular()
+            || $this->isPasswordProtectedPost()
             || \strpos($content, '[et_pb_section') === false
         ) {
             return true;
@@ -91,6 +92,13 @@ final class Plugin
         }
 
         return false;
+    }
+
+    private function isPasswordProtectedPost(): bool
+    {
+        $post = \get_post();
+
+        return $post !== null && !empty($post->post_password);
     }
 
     private function renderSection(string $section): string
