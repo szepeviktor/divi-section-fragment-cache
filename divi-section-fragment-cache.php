@@ -163,7 +163,8 @@ final class Plugin
      *     critical_css: string,
      *     fonts_queue: array<string, array<string, mixed>>,
      *     user_fonts_queue: array<string, mixed>,
-     *     subjects_cache: array<string, mixed>
+     *     subjects_cache: array<string, mixed>,
+     *     divi_element_index_delta: array<string, mixed>
      * }|null
      */
     private function normalizeCachedPayload($cached): ?array
@@ -189,6 +190,9 @@ final class Plugin
             'fonts_queue' => isset($cached['fonts_queue']) && \is_array($cached['fonts_queue']) ? $cached['fonts_queue'] : [],
             'user_fonts_queue' => isset($cached['user_fonts_queue']) && \is_array($cached['user_fonts_queue']) ? $cached['user_fonts_queue'] : [],
             'subjects_cache' => isset($cached['subjects_cache']) && \is_array($cached['subjects_cache']) ? $cached['subjects_cache'] : [],
+            'divi_element_index_delta' => isset($cached['divi_element_index_delta']) && \is_array($cached['divi_element_index_delta'])
+                ? $cached['divi_element_index_delta']
+                : [],
         ];
     }
 
@@ -205,7 +209,8 @@ final class Plugin
      *     critical_css: string,
      *     fonts_queue: array<string, array<string, mixed>>,
      *     user_fonts_queue: array<string, mixed>,
-     *     subjects_cache: array<string, mixed>
+     *     subjects_cache: array<string, mixed>,
+     *     divi_element_index_delta: array<string, mixed>
      * }
      */
     private function captureSectionRenderSnapshot(int $postId, string $section): array
@@ -218,6 +223,7 @@ final class Plugin
         $beforeGeneratedCss = $this->getGeneratedCssSnapshot();
         $beforeFontQueues = $this->getFontQueueSnapshot();
         $beforeSubjectsCache = $this->getSubjectsCacheSnapshot($postId);
+        $beforeDiviElementIndices = $this->getDiviElementIndicesSnapshot();
         $html = $this->renderSection($section);
         $afterAnimationData = $this->getAnimationDataSnapshot();
         $afterLinkOptionsData = $this->getLinkOptionsDataSnapshot();
@@ -227,6 +233,7 @@ final class Plugin
         $afterGeneratedCss = $this->getGeneratedCssSnapshot();
         $afterFontQueues = $this->getFontQueueSnapshot();
         $afterSubjectsCache = $this->getSubjectsCacheSnapshot($postId);
+        $afterDiviElementIndices = $this->getDiviElementIndicesSnapshot();
         $generatedCssDelta = $this->diffGeneratedCssSnapshot($beforeGeneratedCss, $afterGeneratedCss);
 
         return [
@@ -242,6 +249,7 @@ final class Plugin
             'fonts_queue' => $this->diffAssociativeArray($beforeFontQueues['fonts_queue'], $afterFontQueues['fonts_queue']),
             'user_fonts_queue' => $this->diffAssociativeArray($beforeFontQueues['user_fonts_queue'], $afterFontQueues['user_fonts_queue']),
             'subjects_cache' => $this->diffAssociativeArray($beforeSubjectsCache, $afterSubjectsCache),
+            'divi_element_index_delta' => $this->diffRecursiveArray($beforeDiviElementIndices, $afterDiviElementIndices),
         ];
     }
 
@@ -266,6 +274,73 @@ final class Plugin
         }
 
         return \array_values(\array_unique($normalized));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getDiviElementIndicesSnapshot(): array
+    {
+        if (!\class_exists('\ET_Builder_Element') || !\property_exists('\ET_Builder_Element', '_indices')) {
+            return [];
+        }
+
+        $property = new \ReflectionProperty('\ET_Builder_Element', '_indices');
+        $property->setAccessible(true);
+
+        return $property->getValue();
+    }
+
+    /**
+     * @param array<string, mixed> $before
+     * @param array<string, mixed> $after
+     * @return array<string, mixed>
+     */
+    private function diffRecursiveArray(array $before, array $after): array
+    {
+        $delta = [];
+
+        foreach ($after as $key => $value) {
+            if (!\array_key_exists($key, $before)) {
+                $delta[$key] = $value;
+                continue;
+            }
+
+            if (\is_array($before[$key]) && \is_array($value)) {
+                $childDelta = $this->diffRecursiveArray($before[$key], $value);
+
+                if ($childDelta !== []) {
+                    $delta[$key] = $childDelta;
+                }
+
+                continue;
+            }
+
+            if ($before[$key] !== $value) {
+                $delta[$key] = $value;
+            }
+        }
+
+        return $delta;
+    }
+
+    /**
+     * @param array<string, mixed> $current
+     * @param array<string, mixed> $delta
+     * @return array<string, mixed>
+     */
+    private function mergeRecursiveArray(array $current, array $delta): array
+    {
+        foreach ($delta as $key => $value) {
+            if (\array_key_exists($key, $current) && \is_array($current[$key]) && \is_array($value)) {
+                $current[$key] = $this->mergeRecursiveArray($current[$key], $value);
+                continue;
+            }
+
+            $current[$key] = $value;
+        }
+
+        return $current;
     }
 
     /**
@@ -747,11 +822,13 @@ final class Plugin
      *     critical_css: string,
      *     fonts_queue: array<string, array<string, mixed>>,
      *     user_fonts_queue: array<string, mixed>,
-     *     subjects_cache: array<string, mixed>
+     *     subjects_cache: array<string, mixed>,
+     *     divi_element_index_delta: array<string, mixed>
      * } $payload
      */
     private function replaySectionSideEffects(int $postId, array $payload): void
     {
+        $this->replayDiviElementIndexDelta($payload['divi_element_index_delta']);
         $this->replayClassKeyedDiviData('et_builder_handle_animation_data', $payload['animation_data']);
         $this->replayClassKeyedDiviData('et_builder_handle_link_options_data', $payload['link_options_data']);
         $this->replayScrollEffects($payload['scroll_effects']);
@@ -760,6 +837,25 @@ final class Plugin
         $this->replayGeneratedCss($payload['generated_css'], $payload['critical_css']);
         $this->replayFontQueues($payload['fonts_queue'], $payload['user_fonts_queue']);
         $this->replaySubjectsCache($postId, $payload['subjects_cache']);
+    }
+
+    /**
+     * @param array<string, mixed> $delta
+     */
+    private function replayDiviElementIndexDelta(array $delta): void
+    {
+        if (
+            $delta === []
+            || !\class_exists('\ET_Builder_Element')
+            || !\property_exists('\ET_Builder_Element', '_indices')
+        ) {
+            return;
+        }
+
+        $property = new \ReflectionProperty('\ET_Builder_Element', '_indices');
+        $property->setAccessible(true);
+        $current = $property->getValue();
+        $property->setValue(null, $this->mergeRecursiveArray($current, $delta));
     }
 
     /**

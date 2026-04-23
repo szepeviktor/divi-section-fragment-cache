@@ -8,6 +8,7 @@ WordPress plugin that fragment-caches top-level Divi sections and skips caching 
 - Splits the content into top-level `[et_pb_section]...[/et_pb_section]` blocks.
 - Renders each eligible section once and stores a render snapshot in a transient for one day.
 - Bypasses the cache for sections that contain shortcodes from the deny list.
+- Bypasses the plugin entirely on password-protected posts.
 - Bypasses the plugin entirely during Divi frontend builder requests detected by `et_core_is_fb_enabled()`.
 - Replays captured Divi side effects on cache hit before returning cached HTML.
 
@@ -37,6 +38,8 @@ If the content contains other top-level markup or shortcode structures outside D
 The plugin also relies on inferred Divi runtime side effects rather than an official Divi snapshot API, so compatibility should still be treated as partial rather than complete.
 
 To reduce editor risk, the plugin does not run during Divi frontend builder requests.
+
+Password-protected posts are also excluded because WordPress replaces their public content with a password form until the visitor unlocks the post, and the unlocked render depends on password-cookie state.
 
 ## Deny list customization
 
