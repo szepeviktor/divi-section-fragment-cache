@@ -103,7 +103,24 @@ final class Plugin
 
     private function renderSection(string $section): string
     {
-        return (string) \apply_filters('et_builder_render_layout', $section);
+        $removedLayoutWrapper = \remove_filter('et_builder_render_layout', 'et_builder_add_builder_content_wrapper');
+        $removedElementIndexReset = \remove_filter(
+            'et_builder_render_layout',
+            ['ET_Builder_Element', 'reset_element_indexes'],
+            9999
+        );
+
+        $html = (string) \apply_filters('et_builder_render_layout', $section);
+
+        if ($removedElementIndexReset) {
+            \add_filter('et_builder_render_layout', ['ET_Builder_Element', 'reset_element_indexes'], 9999);
+        }
+
+        if ($removedLayoutWrapper) {
+            \add_filter('et_builder_render_layout', 'et_builder_add_builder_content_wrapper');
+        }
+
+        return $html;
     }
 
     private function getCachedSection(int $postId, int $sectionIndex, string $section): string
