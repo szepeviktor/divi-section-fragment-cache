@@ -131,7 +131,7 @@ final class Plugin
             'dsec:%d:%d:%s',
             $postId,
             $sectionIndex,
-            \md5($section)
+            \md5(\et_get_theme_version() . $section)
         );
 
         $cached = \get_transient($cacheKey);
