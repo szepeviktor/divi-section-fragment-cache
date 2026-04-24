@@ -1,6 +1,6 @@
 # Divi Section Fragment Cache
 
-WordPress plugin that fragment-caches top-level Divi sections and skips caching for sections that contain denylisted shortcodes.
+WordPress plugin that fragment-caches top-level Divi sections and skips caching for sections that contain denylisted shortcodes or the `dsec-no-cache` CSS class.
 
 ## What it does
 
@@ -8,6 +8,7 @@ WordPress plugin that fragment-caches top-level Divi sections and skips caching 
 - Splits the content into top-level `[et_pb_section]...[/et_pb_section]` blocks.
 - Renders each eligible section once and stores a render snapshot in a transient for one day.
 - Bypasses the cache for sections that contain shortcodes from the deny list.
+- Bypasses the cache for sections with `dsec-no-cache` in the section CSS class field.
 - Bypasses the plugin entirely on password-protected posts.
 - Bypasses the plugin entirely during Divi frontend builder requests detected by `et_core_is_fb_enabled()`.
 - Replays captured Divi side effects on cache hit before returning cached HTML.
@@ -51,6 +52,12 @@ The plugin ships with a built-in deny list for known dynamic shortcodes in these
 You will likely need to customize this deny list for your own site so that any shortcode producing user-specific, time-sensitive, or otherwise dynamic output is excluded from fragment caching.
 
 At the moment the deny list is defined in `divi-section-fragment-cache.php` as the `Plugin::DENYLIST` constant, so customization currently means editing that list in code.
+
+## Per-section cache bypass
+
+Add `dsec-no-cache` to a Divi section's CSS class field to force that section to render fresh on every request.
+
+The section remains part of normal Divi rendering; it is only excluded from fragment cache reads and writes.
 
 ## Installation
 

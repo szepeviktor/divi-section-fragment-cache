@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Plugin Name: Divi Section Fragment Cache
- * Description: Fragment cache for top-level Divi sections, skipping denylisted shortcodes.
+ * Description: Fragment cache for top-level Divi sections, skipping denylisted shortcodes and explicitly marked sections.
  * Version: 0.2.2
  * Requires PHP: 7.4
  */
@@ -13,6 +13,8 @@ namespace SzepeViktor\DiviSectionFragmentCache;
 
 final class Plugin
 {
+    private const NO_CACHE_CLASS = 'dsec-no-cache';
+
     /**
      * @var string[]
      */
@@ -62,7 +64,7 @@ final class Plugin
 
             $section = $part['content'];
 
-            if ($this->containsDenylistedShortcode($section)) {
+            if ($this->sectionShouldBypassCache($section)) {
                 $output .= $this->renderSection($section);
             } else {
                 $output .= $this->getCachedSection((int) $postId, $sectionIndex, $section);
@@ -1059,6 +1061,33 @@ final class Plugin
         $pattern = '/\[(?:' . \implode('|', \array_map('preg_quote', self::DENYLIST)) . ')\b/';
 
         return \preg_match($pattern, $section) === 1;
+    }
+
+    private function sectionShouldBypassCache(string $section): bool
+    {
+        return $this->containsDenylistedShortcode($section)
+            || $this->sectionHasNoCacheClass($section);
+    }
+
+    private function sectionHasNoCacheClass(string $section): bool
+    {
+        if (!\preg_match('/^\[et_pb_section\b([^\]]*)\]/', $section, $matches)) {
+            return false;
+        }
+
+        if (!\function_exists('shortcode_parse_atts')) {
+            return false;
+        }
+
+        $attributes = \shortcode_parse_atts($matches[1]);
+
+        if (!\is_array($attributes) || !\is_string($attributes['module_class'] ?? null)) {
+            return false;
+        }
+
+        $classes = \preg_split('/\s+/', \trim($attributes['module_class']));
+
+        return \is_array($classes) && \in_array(self::NO_CACHE_CLASS, $classes, true);
     }
 
     /**
