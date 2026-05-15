@@ -5,14 +5,17 @@ declare(strict_types=1);
 /**
  * Plugin Name: Divi Section Fragment Cache
  * Description: Fragment cache for top-level Divi sections, skipping denylisted shortcodes and explicitly marked sections.
- * Version: 0.2.2
+ * Version: 0.3.0
  * Requires PHP: 7.4
+ * Requires Divi: 5.0
  */
 
 namespace SzepeViktor\DiviSectionFragmentCache;
 
 final class Plugin
 {
+    private const CACHE_VERSION = '3';
+
     private const NO_CACHE_CLASS = 'dsec-no-cache';
 
     /**
@@ -128,7 +131,8 @@ final class Plugin
     private function getCachedSection(int $postId, int $sectionIndex, string $section): string
     {
         $cacheKey = \sprintf(
-            'dsec:%d:%d:%s',
+            'dsec:%s:%d:%d:%s',
+            self::CACHE_VERSION,
             $postId,
             $sectionIndex,
             \md5(\et_get_theme_version() . $section)
